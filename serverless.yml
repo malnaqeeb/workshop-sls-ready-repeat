@@ -1,4 +1,4 @@
-service: workshop-${self:custom.name}
+service: workshop1-${self:custom.name}
 
 custom:
   name: razan
