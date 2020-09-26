@@ -24,7 +24,12 @@ functions:
           path: /
           method: get
     environment:
-      restaurants_api: https://#{ApiGatewayRestApi}.execute-api.#{AWS::Region}.amazonaws.com/${self:provider.stage}/restaurants
+      restaurants_api:
+        Fn::Join:
+          - ""
+          - - https://
+            - !Ref ApiGatewayRestApi
+            - .execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}/restaurants
       cognito_user_pool_id: !Ref CognitoUserPool
       cognito_client_id: !Ref WebCognitoUserPoolClient
   get-restaurants:
@@ -115,17 +120,21 @@ resources:
           - ALLOW_REFRESH_TOKEN_AUTH
         PreventUserExistenceErrors: ENABLED
   Outputs:
+    RestApiUrl:
+      Value:
+        Fn::Join:
+          - ""
+          - - https://
+            - !Ref ApiGatewayRestApi
+            - .execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}
     RestaurantsTableName:
       Value: !Ref RestaurantsTable
     CognitoUserPoolId:
       Value: !Ref CognitoUserPool
-
     CognitoUserPoolArn:
       Value: !GetAtt CognitoUserPool.Arn
-
     CognitoUserPoolWebClientId:
       Value: !Ref WebCognitoUserPoolClient
-
     CognitoUserPoolServerClientId:
       Value: !Ref ServerCognitoUserPoolClient
 
