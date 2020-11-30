@@ -1,4 +1,4 @@
-service: workshop-${self:custom.name}
+service: workshop1-${self:custom.name}
 
 custom:
   name: razan
@@ -7,7 +7,9 @@ custom:
 provider:
   name: aws
   runtime: nodejs12.x
-
+  environment:
+    serviceName: ${self:service}
+    stage: ${self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
       Action: dynamodb:scan
@@ -15,6 +17,20 @@ provider:
     - Effect: Allow
       Action: execute-api:Invoke
       Resource: arn:aws:execute-api:#{AWS::Region}:#{AWS::AccountId}:#{ApiGatewayRestApi}/${self:provider.stage}/GET/restaurants
+    - Effect: Allow
+      Action: ssm:GetParameters*
+      Resource:
+        - arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/${self:service}/${self:provider.stage}/get-restaurants/config
+        - arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/${self:service}/${self:provider.stage}/search-restaurants/config
+    - Effect: Allow
+      Action: ssm:GetParameters*
+      Resource:
+        - arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/${self:service}/${self:provider.stage}/get-restaurants/config
+        - arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/${self:service}/${self:provider.stage}/search-restaurants/config
+        - arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/${self:service}/${self:provider.stage}/search-restaurants/secretString
+    - Effect: Allow
+      Action: kms:Decrypt
+      Resource: ${ssm:/dev/kmsArn}
 
 functions:
   get-index:
@@ -24,9 +40,15 @@ functions:
           path: /
           method: get
     environment:
-      restaurants_api: https://#{ApiGatewayRestApi}.execute-api.#{AWS::Region}.amazonaws.com/${self:provider.stage}/restaurants
+      restaurants_api:
+        Fn::Join:
+          - ""
+          - - https://
+            - !Ref ApiGatewayRestApi
+            - .execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}/restaurants
       cognito_user_pool_id: !Ref CognitoUserPool
       cognito_client_id: !Ref WebCognitoUserPoolClient
+
   get-restaurants:
     handler: functions/get-restaurants.handler
     events:
@@ -36,6 +58,7 @@ functions:
           authorizer: aws_iam
     environment:
       restaurants_table: !Ref RestaurantsTable
+
   search-restaurants:
     handler: functions/search-restaurants.handler
     events:
@@ -48,7 +71,6 @@ functions:
             arn: !GetAtt CognitoUserPool.Arn
     environment:
       restaurants_table: !Ref RestaurantsTable
-
 resources:
   Resources:
     RestaurantsTable:
@@ -61,7 +83,6 @@ resources:
         KeySchema:
           - AttributeName: name
             KeyType: HASH
-
     CognitoUserPool:
       Type: AWS::Cognito::UserPool
       Properties:
@@ -97,7 +118,6 @@ resources:
             Required: true
             StringAttributeConstraints:
               MinLength: "1"
-
     WebCognitoUserPoolClient:
       Type: AWS::Cognito::UserPoolClient
       Properties:
@@ -107,7 +127,6 @@ resources:
           - ALLOW_USER_SRP_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
         PreventUserExistenceErrors: ENABLED
-
     ServerCognitoUserPoolClient:
       Type: AWS::Cognito::UserPoolClient
       Properties:
@@ -117,9 +136,28 @@ resources:
           - ALLOW_ADMIN_USER_PASSWORD_AUTH
           - ALLOW_REFRESH_TOKEN_AUTH
         PreventUserExistenceErrors: ENABLED
+    ServiceUrlParameter:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Type: String
+        Name: /${self:service}/${self:provider.stage}/serviceUrl
+        Value:
+          Fn::Join:
+            - ""
+            - - https://
+              - !Ref ApiGatewayRestApi
+              - .execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}
   Outputs:
+    RestApiUrl:
+      Value:
+        Fn::Join:
+          - ""
+          - - https://
+            - !Ref ApiGatewayRestApi
+            - .execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}
     RestaurantsTableName:
       Value: !Ref RestaurantsTable
+
     CognitoUserPoolId:
       Value: !Ref CognitoUserPool
 
@@ -131,7 +169,6 @@ resources:
 
     CognitoUserPoolServerClientId:
       Value: !Ref ServerCognitoUserPoolClient
-
 plugins:
   - serverless-export-env
   - serverless-pseudo-parameters
